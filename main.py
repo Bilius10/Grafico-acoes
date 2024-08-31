@@ -1,72 +1,122 @@
-import requests
+from dash import Dash, html, dcc
+from dash.dependencies import Input, Output
 import plotly.express as px
-import pandas as pd 
-import datetime
+import busca
 
-#insera seu token criado nesse site "https://brapi.dev/dashboard"
-token = "stSHhuStU3BFrRKE7W6x9C"
+# Inicializa a aplicação Dash
+app = Dash(__name__)
 
-#Função usada para fazer o request das informações e armazenar em um df
-def consultar_preco(ticket):
-    
-    #criamos um url personalizado com nossas informações
-    url = f"https://brapi.dev/api/quote/{ticket}?token={token}"
-    params = {
-        'range': '1mo',
-        'interval': '1d',
-    }
+# Definição das cores usadas na interface
+colors = {
+    'background': '#111111',
+    'text': '#7FDBFF'
+}
 
-    #Df que iremos devolver ao usuario
-    df_acao = pd.DataFrame()
+# Inicializar a lista de ações com um valor padrão usando a função unificar() do módulo busca
+acoes = busca.unificar()
 
-    try:
-        #Aqui fazemos um request das informações que queremos com noss link
-        response = requests.get(url, params=params)
-        data = response.json()
-        
-        #Como queremos salvar o valor de cada dia, então faremos um for que começara em 0 e ira até o tamanho
-        #da lista, aonde receberamos o valor de todos do historicalDataPrice
-        for x in range(0,len(data['results'][0]['historicalDataPrice'])):
+# Definição do layout da aplicação
+app.layout = html.Div(style={'backgroundColor': colors['background']}, children=[
+    # Título da ação
+    html.H1(
+        id='titulo-acao',
+        style={
+            'textAlign': 'center',
+            'color': colors['text']
+        }
+    ),
 
-            #Como recebemos a data em um formato em segundos, então aqui convertamos para o formato de data padrão
-            data_convertida = datetime.datetime.utcfromtimestamp(data['results'][0]['historicalDataPrice'][x]['date']).strftime('%Y-%m-%d')
+    # Informações sobre a ação selecionada
+    html.Div(id='info-acao', style={
+        'textAlign': 'center',
+        'color': colors['text']
+    }),
 
-            #Esse df sera para salvar as informações
-            inserir_valor = pd.DataFrame({
-                'Valor': [data['results'][0]['historicalDataPrice'][x]['close']],
-                'Dia': [data_convertida],
-                'Maior': [data['results'][0]['historicalDataPrice'][x]['high']],
-                'Menor': [data['results'][0]['historicalDataPrice'][x]['low']],
-            })
+    # Informações de compra/venda
+    html.Div(id='info-venda', style={
+        'textAlign': 'center',
+        'color': colors['text']
+    }),
 
-            #Concateamos sempre que o for passar, porque se não fazer isso, so teremos a ultima informação salva
-            df_acao = pd.concat([df_acao, inserir_valor], ignore_index=True)
+    # Dropdown para seleção de ações
+    html.Div(
+        dcc.Dropdown(
+            options=[{'label': acao, 'value': acao} for acao in acoes],
+            value=acoes[0],  # Define o primeiro valor da lista como padrão
+            id='Lista-acoes',
+            style={
+                'width': '50%',  # Ajustado para o mesmo tamanho do padrão anterior
+                'backgroundColor': colors['background'],  # Cor de fundo do dropdown
+                'border': '1px solid #7FDBFF'  # Cor da borda para combinar com o texto
+            }
+        ),
+        style={
+            'display': 'flex',
+            'justify-content': 'center',
+            'margin': '20px'  # Ajustado para manter a margem consistente com o restante do layout
+        }
+    ),   
 
-        return df_acao
-    
-    #Se der errado algo acima, seremos informados o keyerror
-    except KeyError as e:
-        print(e)
+    # Gráfico de valor da ação por dia
+    dcc.Graph(
+        id='VD'
+    ),
 
-#Buscamos a lista de nomes de ações presentes nesse site e salvamos elas
-response = requests.get("https://brapi.dev/api/available")
-data = response.json()
+    # Gráfico de maior e menor valor por dia
+    dcc.Graph(
+        id='MMD'
+    )
+])
 
-print("Escolha uma ação para ver seu rendimento")
-ac = str(input("Ação: "))
+# Função de callback para atualizar a interface com base na ação selecionada
+@app.callback(
+    [
+        Output('titulo-acao', 'children'),
+        Output('info-acao', 'children'),
+        Output('info-venda', 'children'),
+        Output('VD', 'figure'),
+        Output('MMD', 'figure')
+    ],
+    [Input('Lista-acoes', 'value')]
+)
+def update_output(value):
+    # Atualiza a variável `ac` com o valor selecionado no dropdown
+    ac = value
+    df = busca.consultar_preco(ac)
 
-#Verificamos se o nome da nossa ação existe dentro da lista de ações que salvamos
-if ac in data['indexes'] or data['stocks']:
+    # Calcula a variação percentual entre o valor do último dia e o valor do primeiro dia
+    num = round(((df['Valor'].iloc[-1] - df['Valor'][0]) / df['Valor'][0]) * 100, 2)
+  
+    # Cria o gráfico de valor por dia
+    fig = px.line(df, x="Dia", y="Valor", title=f"Gráfico de valor por dia")
+    # Cria o gráfico de maior e menor valor por dia
+    fig1 = px.line(df, x="Dia", y=['Maior', 'Menor'], title=f"Gráfico de maior e menor valor por dia")
 
-    #Puxamos a ação para receber as informações
-    df_acao= consultar_preco(ac)
-else:
-    print("Ação não esta em nossa lista")
+    # Estiliza os gráficos com as cores definidas
+    fig.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
 
-#Aqui criamos um grafico com valor por dia
-fig = px.line(df_acao, x="Dia", y="Valor", title=f"{ac}")
-fig.show()
+    fig1.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
 
-#Aqui criamos um grafico que mostra o valor maixmo e minimo da ação por dia
-fig = px.line(df_acao, x="Dia", y=['Maior','Menor'], title=f"{ac}")
-fig.show()
+    # Chama a função `comprar` para determinar se deve comprar, vender ou manter a ação
+    resposta, porc = busca.comprar(df)
+
+    # Atualiza as informações a serem exibidas na interface
+    titulo_acao = f'{ac}'
+    info_acao = f'Informações sobre a ação {ac} nos últimos 30 dias | Vendas: {df["volume"].sum()} | Porcentagem: {num}%'
+    info_venda = f'Comprar ação: {resposta} | Porcentagem do dia: {porc}%'
+
+    # Retorna os valores para atualizar o layout da aplicação
+    return titulo_acao, info_acao, info_venda, fig, fig1
+
+# Executa a aplicação em modo de depuração
+if __name__ == '__main__':
+    app.run(debug=True)
+
