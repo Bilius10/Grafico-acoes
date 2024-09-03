@@ -64,13 +64,15 @@ def unificar():
 
     return unificado
 
+
+#Refazer amanha/valores não funcionam
 #Nessa função, iremos fazer uma checagem diaria da ação para retornar se o usuario deve comprar ou vender
 def comprar(df):
 
     #Calcula a diferença percentual entre o preço de abertura e o maior preço do dia, em relação ao maior preço
-    ama = round(((df['Abertura'].iloc[-1] - df['Maior'].iloc[-1]) / df['Maior'].iloc[-1]) * 100, 2)
+    ama = round(((df['Maior'].iloc[-1] - df['Abertura'].iloc[-1]) / df['Abertura'].iloc[-1]) * 100, 2)
     #Calcula a diferença percentual entre o preço de abertura e o menor preço do dia, em relação ao menor preço.
-    ame = round(((df['Abertura'].iloc[-1] - df['Menor'].iloc[-1]) / df['Menor'].iloc[-1]) * 100, 2)
+    ame = round(((df['Menor'].iloc[-1] - df['Abertura'].iloc[-1]) / df['Abertura'].iloc[-1]) * 100, 2)
 
     #Caso a diferença for maior que 5% entre o maior preco e a aberture
     if ama > 5:
